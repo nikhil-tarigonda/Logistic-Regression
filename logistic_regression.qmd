@@ -1,0 +1,182 @@
+---
+title: "Logistic Regression"
+author: "Nikhil Tarigonda"
+format: pdf
+editor: visual
+---
+
+### Loading all the required packages
+
+```{r}
+library(pacman)
+p_load(dplyr, Amelia, ggplot2, caTools)
+```
+
+### Downloading the UCI adult data set
+
+```{r}
+uci <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databases/adult//adult.data"), header=F)
+
+colnames(uci) <- c("age", "type_employer", "fnlwgt" ,"education", "education_num", "marital", "occupation", "relationship", "race", "sex", "capital_gain", "capital_loss", "hr_per_week", "region", "income")
+
+head(uci)
+#str(uci)
+```
+
+### Data Cleaning for employer column
+
+```{r}
+table(uci$type_employer)
+#combine employer using a function since never worked and without-pay is same
+
+unemp <- function(job) {
+  job <- as.character(job)
+  job <- gsub(" ", "", job)
+  if (job == 'Never-worked' | job == 'Without-pay'){
+    return('Unemployed')
+  }else{
+    return(job)
+  }
+}
+
+uci$type_employer <- sapply(uci$type_employer, unemp)
+
+group_emp <- function(job) {
+  job <- as.character(job)
+  job <- gsub(" ", "", job)
+  if (job == 'Local-gov' | job == 'State-gov'){
+    return('SL-gov')
+  }else if(job == "Self-emp-inc" | job == "Self-emp-not-inc"){
+   return("self-emp") 
+  }
+  else{
+    return(job)
+  }
+}
+
+uci$type_employer <- sapply(uci$type_employer, group_emp)
+table(uci$type_employer)
+```
+
+### Data cleaning for marital status column
+
+```{r}
+table(uci$marital)
+
+group_marital <- function(mar) {
+  mar <- as.character(mar)
+  mar <- gsub(" ", "", mar)
+  if (mar == 'Divorced' | mar == 'Seperated' | mar == 'Widowed'){
+    return('Not-married')
+  }else if(mar == "Never-married"){
+   return("mar") 
+  }
+  else{
+    return("Married")
+  }
+}
+
+uci$marital <- sapply(uci$marital, group_marital)
+
+table(uci$marital)
+
+```
+
+### Data cleaning for country
+
+```{r}
+Asia <- c('China', 'Hong', 'India', 'Iran', 'Cambodia', 'Japan', 'Laos', 
+'Philippines', 'Vietnam', 'Taiwan','Thailand')
+
+North.America <- c('Canada' , 'United-States', 'Puerto-Rico')
+
+Europe <- c('England', 'France','Germany', 'Greece' , 'Holand-Netherlands', 'Hungary', 'Ireland','Italy', 'Poland', 'Portugal','Scotland','Yugoslavia')
+
+Latin.and.South.America <- c('Columbia', 'Cuba', 'Dominican-Republic', 'Ecuador','El-Salvador', 'Guatemala','Haiti', 'Honduras','Mexico','Nicaragua','Outlying-US (Guam-USVI-etc)' , 'Peru', 'Jamaica','Trinadad&Tobago')
+
+Other <- ('South')
+
+group_country <- function(country) {
+  country <- gsub(" ", "", country)
+  if (country %in% Asia) {
+    return('Asia')
+  }else if(country %in% North.America) {
+    return('North.America')
+  }else if(country %in% Europe) {
+    return('Europe')
+  }else if(country %in% Latin.and.South.America) {
+    return('Latin.and.South.America')
+  }else {
+    return('Other')
+  }
+}
+
+uci$region <- sapply(uci$region, group_country)
+
+table(uci$region)
+```
+
+### Missing Data and factoring the columns
+
+```{r}
+uci[uci == "?"] <- NA
+missmap(uci)
+
+uci$type_employer <- sapply(uci$type_employer, factor)
+uci$education <- sapply(uci$education, factor)
+uci$marital <- sapply(uci$marital, factor)
+uci$occupation <- sapply(uci$occupation, factor)
+uci$relationship <- sapply(uci$relationship, factor)
+uci$race <- sapply(uci$race, factor)
+uci$sex <- sapply(uci$sex, factor)
+uci$country <- sapply(uci$country, factor)
+uci$income <- sapply(uci$income, factor)
+#str(uci)
+```
+
+### Drop Missing data
+
+```{r}
+uci <- na.omit(uci)
+```
+
+### EDA
+
+```{r}
+uci %>% ggplot(aes(age)) + 
+  geom_histogram(aes(fill = income, color = 'black', binwidth = 1)) +
+  theme_bw()
+
+uci %>% ggplot(aes(hr_per_week)) + 
+  geom_histogram() +
+  theme_bw()
+
+```
+
+### Logistic Regression Model
+
+#### Train and Test split
+
+```{r}
+set.seed(101)
+sample <- sample.split(uci$income, SplitRatio = 0.7)
+
+train_set <- subset(uci, sample == T)
+test_set <- subset(uci, sample == F)
+
+model <- glm(income ~ ., data = train_set, family = binomial(link = "logit"))
+
+#summary(model)
+
+new_model <- step(model)
+
+#summary(new_model)
+```
+
+### Predicting and confusion matrix
+
+```{r}
+results <- predict(newdata = test_set, model, type = 'response')
+
+table(test_set$income, results > 0.5)
+```
